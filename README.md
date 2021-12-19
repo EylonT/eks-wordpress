@@ -37,7 +37,7 @@ If you are using any region other than us-east-1, please change the default regi
 
 ## Installation guide:
 
-* Go the the terraform folder and run terraform init to install the provide's plugins, terraform plan to see the resources that will be created and then terraform apply or terraform apply -auto-approve (This step could take 15-20 minutes so be patient). You have to give terraform the rds password and username you want the rds database to have and your key pair name.
+* Go the the terraform folder and run terraform init to install the provider's plugins, terraform plan to see the resources that will be created and then terraform apply or terraform apply -auto-approve (This step could take 15-20 minutes so be patient). You have to give terraform the rds password and username you want the rds database to have and your key pair name.
 
 * Run the command: aws eks update-kubeconfig --region *region* --name eks-cluster (It will allow your machine to connect to the EKS control plane).
 
