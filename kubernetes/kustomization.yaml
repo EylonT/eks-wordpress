@@ -1,0 +1,9 @@
+secretGenerator:
+- name: wordpress-secrets
+  literals:
+  - name=
+  - user=
+  - password=
+  - endpoint=
+resources:
+  - wordpress-deployment.yaml
