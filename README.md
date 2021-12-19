@@ -57,13 +57,18 @@ If you are using any region other than us-east-1, please change the default regi
 This command will bind your iam role with the policy that terraform created to a service account (You can also create a service account manually, if you want to do so please consult the documentation).
 
 * Use helm to install the EFS driver:
+
 helm repo add aws-efs-csi-driver https://kubernetes-sigs.github.io/aws-efs-csi-driver/
+
 helm repo update
+
 helm upgrade -i aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
     --namespace kube-system \
-    --set image.repository=123456789012.dkr.ecr.region-code.amazonaws.com/eks/aws-efs-csi-driver \ # change this image according to your region: https://docs.aws.amazon.com/eks/latest/userguide/add-ons-images.html this is the container image of the efs driver.
+    --set image.repository=123456789012.dkr.ecr.region-code.amazonaws.com/eks/aws-efs-csi-driver \
     --set controller.serviceAccount.create=false \
     --set controller.serviceAccount.name=efs-csi-controller-sa
+
+change the image according to your region: https://docs.aws.amazon.com/eks/latest/userguide/add-ons-images.html this is the container image of the efs driver.
 
 * Navigate to the kubernetes folder and edit the storageclass.yaml file, enter your EFS file system id, save the file and run kubectl apply -f storageclass.yaml
 Now kubernetes knows how to create a persistent volume with EFS.
