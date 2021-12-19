@@ -28,7 +28,7 @@ If you are using any region other than us-east-1, please change the default regi
 ## Project requirments:
 
 1. terraform    https://www.terraform.io/downloads
-2. aws          clihttps://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+2. aws cli      https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 3. helm         https://helm.sh/docs/intro/install/
 4. eksctl       https://docs.aws.amazon.com/eks/latest/userguide/eksctl.html
 5. kubectl      https://kubernetes.io/docs/tasks/tools/
