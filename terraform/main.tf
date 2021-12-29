@@ -14,7 +14,7 @@ locals {
 }
 
 module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
+  source               = "terraform-aws-modules/vpc/aws"
   name                 = "k8s-vpc"
   cidr                 = "172.16.0.0/16"
   azs                  = data.aws_availability_zones.available.names
@@ -144,22 +144,22 @@ resource "aws_security_group" "efs" {
 }
 
 module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
+  source = "terraform-aws-modules/eks/aws"
 
-  cluster_name    = local.cluster_name
-  cluster_version = "1.21"
-  subnets         = module.vpc.private_subnets
+  cluster_name                    = local.cluster_name
+  cluster_version                 = "1.21"
+  subnets                         = module.vpc.private_subnets
   cluster_endpoint_private_access = true
-  vpc_id = module.vpc.vpc_id
-  workers_additional_policies = [aws_iam_policy.worker_policy_efs.arn]
+  vpc_id                          = module.vpc.vpc_id
+  workers_additional_policies     = [aws_iam_policy.worker_policy_efs.arn]
 
   worker_groups = [
     {
-      instance_type = "t3.medium"
-      asg_max_size  = 5
-      asg_desired_capacity = 3
+      instance_type                 = "t3.medium"
+      asg_max_size                  = 5
+      asg_desired_capacity          = 3
       additional_security_group_ids = [aws_security_group.private_eks.id]
-      key_name = var.key_pair
+      key_name                      = var.key_pair
     }
   ]
 }
@@ -172,8 +172,8 @@ resource "aws_iam_policy" "worker_policy_efs" {
 }
 
 resource "aws_eip" "eip" {
-  vpc                       = true
-  depends_on                = [module.vpc]
+  vpc        = true
+  depends_on = [module.vpc]
 }
 
 resource "aws_eip_association" "eip_assoc" {
@@ -182,11 +182,11 @@ resource "aws_eip_association" "eip_assoc" {
 }
 
 resource "aws_instance" "bastion-host" {
-  ami               = "ami-0ed9277fb7eb570c9"
-  instance_type     = "t3.micro"
+  ami                    = "ami-0ed9277fb7eb570c9"
+  instance_type          = "t3.micro"
   vpc_security_group_ids = [aws_security_group.public_ssh.id]
-  subnet_id = module.vpc.public_subnets[0]
-  key_name          = var.key_pair
+  subnet_id              = module.vpc.public_subnets[0]
+  key_name               = var.key_pair
   root_block_device {
     encrypted = true
   }
@@ -209,19 +209,19 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 }
 
 resource "aws_db_instance" "rds_wp" {
-  engine = "mysql"
-  identifier = "wordpress-db"
-  username = var.db_user_name
-  password = var.db_password
-  instance_class = "db.t3.micro"
-  storage_type = "gp2"
-  multi_az = true
-  allocated_storage = 10
-  db_subnet_group_name = aws_db_subnet_group.db_subnet_group.name
+  engine                 = "mysql"
+  identifier             = "wordpress-db"
+  username               = var.db_user_name
+  password               = var.db_password
+  instance_class         = "db.t3.micro"
+  storage_type           = "gp2"
+  multi_az               = true
+  allocated_storage      = 10
+  db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.db.id]
-  storage_encrypted = true
-  skip_final_snapshot = true
-  name = "wordpressdb"
+  storage_encrypted      = true
+  skip_final_snapshot    = true
+  name                   = "wordpressdb"
 }
 
 resource "aws_efs_file_system" "efs" {
@@ -230,24 +230,24 @@ resource "aws_efs_file_system" "efs" {
     transition_to_ia = "AFTER_30_DAYS"
   }
   tags = {
-  Name = "eks-efs"
+    Name = "eks-efs"
   }
 }
 
 resource "aws_efs_mount_target" "efs-mount-1" {
-  file_system_id = aws_efs_file_system.efs.id
-  subnet_id      = module.vpc.private_subnets[0]
+  file_system_id  = aws_efs_file_system.efs.id
+  subnet_id       = module.vpc.private_subnets[0]
   security_groups = [aws_security_group.efs.id]
 }
 
 resource "aws_efs_mount_target" "efs-mount-2" {
-  file_system_id = aws_efs_file_system.efs.id
-  subnet_id      = module.vpc.private_subnets[1]
+  file_system_id  = aws_efs_file_system.efs.id
+  subnet_id       = module.vpc.private_subnets[1]
   security_groups = [aws_security_group.efs.id]
 }
 
 resource "aws_efs_mount_target" "efs-mount-3" {
-  file_system_id = aws_efs_file_system.efs.id
-  subnet_id      = module.vpc.private_subnets[2]
+  file_system_id  = aws_efs_file_system.efs.id
+  subnet_id       = module.vpc.private_subnets[2]
   security_groups = [aws_security_group.efs.id]
 }
