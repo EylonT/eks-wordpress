@@ -1,8 +1,3 @@
-output "bastion_public_ip" {
-  description = "The elastic ip of the bastion host"
-  value       = aws_instance.bastion-host.public_ip
-}
-
 output "cluster_endpoint" {
   description = "The endpoint for the EKS control plane"
   value       = module.eks.cluster_endpoint

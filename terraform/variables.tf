@@ -3,17 +3,12 @@ variable "region" {
   description = "AWS region"
 }
 
-variable "key_pair" {
-  description = "key pair for the ec2 instances"
-  sensitive   = true
-}
-
 variable "db_user_name" {
-  description = "the rds mysql username"
+  description = "The rds mysql username"
   sensitive   = true
 }
 
 variable "db_password" {
-  description = "the rds mysql password"
+  description = "The rds mysql password"
   sensitive   = true
 }
