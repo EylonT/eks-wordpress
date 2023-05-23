@@ -1,12 +1,12 @@
 terraform {
   backend "s3" {
     # Replace this with your bucket name!
-    bucket = "bucket-terraform-state-u97c"
+    bucket = ""
     key    = "global/s3/terraform.tfstate"
     region = "us-east-1"
 
     # Replace this with your DynamoDB table name!
-    dynamodb_table = "terraform-state-locks"
+    dynamodb_table = "table-terraform-state-locks"
     encrypt        = true
   }
   required_providers {

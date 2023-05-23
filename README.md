@@ -1,29 +1,29 @@
 # This project provisions a wordpress EKS cluster.
 
+NOTE:
+
+This project has recently been updated to reflect on a lot of changes from the last two years.
+IAM policies were updated.
+A lot of the syntax in the EKS module was deprecated so it has been updated to work with the latest version.
+The bastion host is no logner living in a public subnet and does not have any public IP and SSH access.
+You can only access it via SSM in the AWS console or CLI which is the best practice.
+DB subnets have been added, so application subnets are private and have NAT gateways and DB subnets don't have access to the internet at all.
+A folder for provisioning remote tfstate S3 bucket and DynamoDB has been added.
+Updated EKS to use version 1.26
+Updated the bastion host to use Amazon Linux 2023
+
 The project uses terraform to initialize the following:
 
-* VPC with 3 private subnets and 3 public subnets in 3 availability zones
-* NAT gateway
+* VPC with 3 db subnets, 3 private subnets and 3 public subnets in 3 availability zones
+* NAT gateway per az
 * EFS file system for persistent storage 
-* EKS cluster of 3 nodes in the private subnets
-* Bastion host in a public subnet 
-* RDS database in a private subnet with multi-az
+* EKS cluster of 3 nodes in each private subnet
+* Bastion host in the private subnet for administrating the eks cluster and terraform 
+* RDS database in a db non-internet subnet with multi-az
 * Security groups for the bastion host, eks nodes and rds
 * policy and role to the eks cluster with permissions for efs
 
 The EKS nodes will run a deployment of wordpress pods with a load balancer service, a persistent volume (efs) and a mysql database (rds).
-You can use the bastion host to connect to the private nodes if needed, with ssh agent forwarding that will forward your key pair to the nodes.
-for example:
-
-eval `ssh-agent` - will start the ssh agent process
-ssh-add *your key.pem*
-ssh -A ec2-user@IP
-ssh ec2-user@INTERNAL-IP
-
-*** NOTE ***
-
-If you are on Linux, please change the shared_credentials_file in the providers.tf file to your credentials location.
-If you are using any region other than us-east-1, please change the default region variable in the variables.tf file or use terraform apply -var region="value".
 
 ## Project requirments:
 
@@ -33,13 +33,17 @@ If you are using any region other than us-east-1, please change the default regi
 4. eksctl       https://docs.aws.amazon.com/eks/latest/userguide/eksctl.html
 5. kubectl      https://kubernetes.io/docs/tasks/tools/
 6. default aws credentials (if you're using profiles you should modify the terraform file accordingly)
-7. a key pair in your machine
 
 ## Installation guide:
 
-* Go the the terraform folder and run terraform init to install the provider's plugins, terraform plan to see the resources that will be created and then terraform apply or terraform apply -auto-approve (This step could take 15-20 minutes so be patient). You have to give terraform the rds password and username you want the rds database to have and your key pair name.
+* Go to the tfstate-resources folder and run terraform init and then terraform apply to create the S3 for storing the tfstate remotly and the DynamoDB table for lock override prevention.
+Because S3 buckets have to have a unique name, a random_String terraform resource is implemented to add a random suffix, so after the bucket is created, go to the terraform folder and update the bucket name there in the providers.tf file.
 
-* Run the command: aws eks update-kubeconfig --region *region* --name eks-cluster (It will allow your machine to connect to the EKS control plane).
+* Go the the terraform folder and run terraform init to install the provider's plugins, terraform plan to see the resources that will be created and then terraform apply or terraform apply -auto-approve (This step could take 15-20 minutes so be patient). You have to give terraform the rds password and username you want the rds database to have and you can edit them in the terraform.tfvars file.
+
+* The best practice is to no longer access the cluster from outside of the VPC, so you can login to the bastion which will have all the necessary tools, and clone the terraform repository, change the cluster_endpoint_public_access value in the main.tf file from true to false, so no one would be able to access the cluster endpoint outside of the VPC so only the bastion host could use kubectl to manage the cluster.
+
+* Run the command: aws eks update-kubeconfig --region *region* --name *name* (It will allow your machine to connect to the EKS control plane).
 
 * Run the command: eksctl utils associate-iam-oidc-provider --cluster eks-cluster --approve (The oidc provider is needed for the cluster to work with efs).
 
@@ -49,7 +53,7 @@ If you are using any region other than us-east-1, please change the default regi
     --name efs-csi-controller-sa \
     --namespace kube-system \
     --cluster eks-cluster \
-    --attach-policy-arn *Your copyied arn* \
+    --attach-policy-arn *your copied arn* \
     --approve \
     --override-existing-serviceaccounts \
     --region region-code
@@ -64,7 +68,7 @@ helm repo update
 
 helm upgrade -i aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
     --namespace kube-system \
-    --set image.repository=123456789012.dkr.ecr.region-code.amazonaws.com/eks/aws-efs-csi-driver \
+    --set image.repository=<region-registry>.dkr.ecr.<region-code>.amazonaws.com/eks/aws-efs-csi-driver \
     --set controller.serviceAccount.create=false \
     --set controller.serviceAccount.name=efs-csi-controller-sa
 

@@ -1,5 +1,6 @@
-data "aws_availability_zones" "available" {
-}
+data "aws_availability_zones" "available" {}
+
+data "aws_caller_identity" "current" {}
 
 data "aws_ami" "latest_amazon_linux" {
   most_recent = true
@@ -160,6 +161,21 @@ resource "aws_iam_policy" "policy_eks_full_access" {
   })
 }
 
+resource "aws_iam_policy" "policy_terraform_permissions" {
+  name = "policy-terraform-permissions"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["vpc:*", "elasticfilesystem:*", "ec2:*", "s3:*", "dynamodb:*", "rds:*", "logs:*", "kms:*", "cloudformation:*"]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_policy" "iam_limited_access" {
   name        = "policy-iam-limited-access"
   description = "IAM policy for bastion"
@@ -172,7 +188,8 @@ resource "aws_iam_role" "ec2_bastion_iam_role" {
   managed_policy_arns = [
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
     aws_iam_policy.iam_limited_access.arn,
-    aws_iam_policy.policy_eks_full_access.arn
+    aws_iam_policy.policy_eks_full_access.arn,
+    aws_iam_policy.policy_terraform_permissions.arn
   ]
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -206,12 +223,26 @@ resource "aws_instance" "bastion_host" {
   }
   user_data = <<-EOF
                 #!/bin/bash
-                su - ec2-user
+                cd /tmp
                 yum update -y
+                yum install -y yum-utils
+                yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+                yum -y install terraform
+                curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+                chmod 700 get_helm.sh
+                ./get_helm.sh
                 curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.26.2/2023-03-17/bin/linux/amd64/kubectl
                 chmod +x ./kubectl
                 mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
                 echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+                # for ARM systems, set ARCH to: `arm64`, `armv6` or `armv7`
+                ARCH=amd64
+                PLATFORM=$(uname -s)_$ARCH
+                curl -sLO "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+                # (Optional) Verify checksum
+                curl -sL "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
+                tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
+                sudo mv /tmp/eksctl /usr/local/bin
                 EOF
   tags = {
     Name = "i-bastion-host"
@@ -268,7 +299,7 @@ module "eks" {
     managed-node-group-01 = {
       min_size     = 1
       max_size     = 4
-      desired_size = 2
+      desired_size = 3
 
       instance_types = ["t3.medium"]
       iam_role_additional_policies = {
@@ -278,7 +309,8 @@ module "eks" {
     }
   }
 
-  kms_key_owners = [aws_iam_role.ec2_bastion_iam_role.arn]
+  kms_key_administrators = [aws_iam_role.ec2_bastion_iam_role.arn, data.aws_caller_identity.current.account_id]
+  kms_key_users          = [aws_iam_role.ec2_bastion_iam_role.arn, data.aws_caller_identity.current.account_id]
 
   manage_aws_auth_configmap = true
 
@@ -307,7 +339,7 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 
 resource "aws_db_instance" "rds_wp" {
   engine                 = "mysql"
-  identifier             = "wordpress-db"
+  identifier             = "db-wordpress"
   username               = var.db_user_name
   password               = var.db_password
   instance_class         = "db.t3.micro"
@@ -318,7 +350,7 @@ resource "aws_db_instance" "rds_wp" {
   vpc_security_group_ids = [aws_security_group.db.id]
   storage_encrypted      = true
   skip_final_snapshot    = true
-  db_name                = "wordpressdb"
+  db_name                = "dbwordpress"
 }
 
 resource "aws_efs_file_system" "efs" {

@@ -1,13 +1,12 @@
 resource "random_string" "random" {
   length           = 4
-  special          = true
-  override_special = "/@£$"
+  special          = false
   lower            = true
   upper            = false
 }
 
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "bucket-terraform-state-${random_string.random.result}"
+  bucket = "${var.s3_bucket_name}-${random_string.random.result}"
 
   # Prevent accidental deletion of this S3 bucket
   lifecycle {
@@ -41,7 +40,7 @@ resource "aws_s3_bucket_public_access_block" "public_access" {
 }
 
 resource "aws_dynamodb_table" "terraform_locks" {
-  name         = "terraform-state-locks"
+  name         = var.dynamodb_table_name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 

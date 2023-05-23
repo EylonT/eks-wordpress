@@ -31,7 +31,9 @@
                 "iam:DeletePolicy",
                 "iam:ListPolicyVersions",
                 "iam:ListRolePolicies",
-                "iam:GetPolicyVersion"
+                "iam:GetPolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:CreatePolicyVersion"
             ],
             "Resource": [
                 "arn:aws:iam::*:instance-profile/*",
