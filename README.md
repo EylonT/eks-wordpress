@@ -37,26 +37,26 @@ The EKS nodes will run a deployment of wordpress pods with a load balancer servi
 ## Installation guide:
 
 * Go to the tfstate-resources folder and run terraform init and then terraform apply to create the S3 for storing the tfstate remotly and the DynamoDB table for lock override prevention.
-Because S3 buckets have to have a unique name, a random_String terraform resource is implemented to add a random suffix, so after the bucket is created, go to the terraform folder and update the bucket name there in the providers.tf file.
+Because S3 buckets have to have a unique name, a random_string terraform resource is implemented to add a random suffix, so after the bucket is created, go to the terraform folder and update the bucket name there in the providers.tf file.
 
 * Go the the terraform folder and run terraform init to install the provider's plugins, terraform plan to see the resources that will be created and then terraform apply or terraform apply -auto-approve (This step could take 15-20 minutes so be patient). You have to give terraform the rds password and username you want the rds database to have and you can edit them in the terraform.tfvars file.
 
 * The best practice is to no longer access the cluster from outside of the VPC, so you can login to the bastion which will have all the necessary tools, and clone the terraform repository, change the cluster_endpoint_public_access value in the main.tf file from true to false, so no one would be able to access the cluster endpoint outside of the VPC so only the bastion host could use kubectl to manage the cluster.
 
-* Run the command: aws eks update-kubeconfig --region *region* --name *name* (It will allow your machine to connect to the EKS control plane).
+* Run the command: aws eks update-kubeconfig --region <region> --name <name> (It will allow your machine to connect to the EKS control plane).
 
-* Run the command: eksctl utils associate-iam-oidc-provider --cluster eks-cluster --approve (The oidc provider is needed for the cluster to work with efs).
+* Run the command: eksctl utils associate-iam-oidc-provider --cluster <eks-cluster> --approve (The oidc provider is needed for the cluster to work with efs).
 
 * Use terraform state show aws_iam_policy.worker_policy_efs or use the aws console/cli and copy the policy arn.
 
 * Use eksctl create iamserviceaccount \
     --name efs-csi-controller-sa \
     --namespace kube-system \
-    --cluster eks-cluster \
-    --attach-policy-arn *your copied arn* \
+    --cluster <eks-cluster> \
+    --attach-policy-arn <your copied arn> \
     --approve \
     --override-existing-serviceaccounts \
-    --region region-code
+    --region <region-code>
 
 This command will bind your iam role with the policy that terraform created to a service account (You can also create a service account manually, if you want to do so please consult the documentation).
 
