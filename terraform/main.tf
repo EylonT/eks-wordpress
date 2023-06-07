@@ -18,15 +18,9 @@ data "aws_ami" "latest_amazon_linux" {
   owners = ["amazon"]
 }
 
-locals {
-  cluster_name    = "eks-lab-01"
-  cluster_version = "1.26"
-  vpc_name        = "vpc-k8s"
-}
-
 module "vpc" {
   source               = "terraform-aws-modules/vpc/aws"
-  name                 = local.vpc_name
+  name                 = var.vpc_name
   cidr                 = "172.16.0.0/16"
   azs                  = slice(data.aws_availability_zones.available.names, 0, 3)
   public_subnets       = ["172.16.1.0/24", "172.16.2.0/24", "172.16.3.0/24"]
@@ -42,18 +36,18 @@ module "vpc" {
   flow_log_max_aggregation_interval    = 60
 
   public_subnet_tags = {
-    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                      = "1"
   }
 
   private_subnet_tags = {
-    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"             = "1"
   }
 }
 
 resource "aws_security_group" "ec2_bastion" {
-  name        = "sgr-ec2-bastion"
+  name        = var.bastion_security_group_name
   description = "Bastion EC2 security group"
   vpc_id      = module.vpc.vpc_id
 
@@ -65,7 +59,7 @@ resource "aws_security_group" "ec2_bastion" {
   }
 
   tags = {
-    Name = "sgr-ec2-bastion"
+    Name = var.bastion_security_group_name
   }
 
   lifecycle {
@@ -74,7 +68,7 @@ resource "aws_security_group" "ec2_bastion" {
 }
 
 resource "aws_security_group" "db" {
-  name        = "sgr-rds-db"
+  name        = var.rds_security_group_name
   description = "Allow MySQL inbound traffic"
   vpc_id      = module.vpc.vpc_id
 
@@ -94,7 +88,7 @@ resource "aws_security_group" "db" {
   }
 
   tags = {
-    Name = "sgr-rds-db"
+    Name = var.rds_security_group_name
   }
 
   lifecycle {
@@ -103,7 +97,7 @@ resource "aws_security_group" "db" {
 }
 
 resource "aws_security_group" "efs" {
-  name        = "sgr-efs-filesystem"
+  name        = var.efs_security_group_name
   description = "Allow NFS inbound traffic"
   vpc_id      = module.vpc.vpc_id
 
@@ -123,7 +117,7 @@ resource "aws_security_group" "efs" {
   }
 
   tags = {
-    Name = "sgr-efs"
+    Name = var.efs_security_group_name
   }
 
   lifecycle {
@@ -213,7 +207,7 @@ resource "aws_iam_instance_profile" "ec2_bastion_instance_profile" {
 
 resource "aws_instance" "bastion_host" {
   ami                    = data.aws_ami.latest_amazon_linux.id
-  instance_type          = "t3.micro"
+  instance_type          = var.ec2_instance_type
   subnet_id              = module.vpc.private_subnets[0]
   iam_instance_profile   = aws_iam_instance_profile.ec2_bastion_instance_profile.name
   vpc_security_group_ids = [aws_security_group.ec2_bastion.id]
@@ -245,13 +239,13 @@ resource "aws_instance" "bastion_host" {
                 sudo mv /tmp/eksctl /usr/local/bin
                 EOF
   tags = {
-    Name = "i-bastion-host"
+    Name = var.ec2_bastion_name
   }
 }
 
 resource "aws_iam_policy" "worker_policy_efs" {
   name        = "policy-efs-worker-nodes"
-  description = "Worker policy for the EFS"
+  description = "Worker policy for EFS"
 
   policy = file("iam-policy-efs-controller.json")
 }
@@ -259,8 +253,8 @@ resource "aws_iam_policy" "worker_policy_efs" {
 module "eks" {
   source = "terraform-aws-modules/eks/aws"
 
-  cluster_name                    = local.cluster_name
-  cluster_version                 = local.cluster_version
+  cluster_name                    = var.cluster_name
+  cluster_version                 = var.cluster_version
   cluster_enabled_log_types       = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = true
@@ -301,7 +295,7 @@ module "eks" {
       max_size     = 4
       desired_size = 3
 
-      instance_types = ["t3.medium"]
+      instance_types = [var.eks_instance_type]
       iam_role_additional_policies = {
         policy-managed-node-group-efs = aws_iam_policy.worker_policy_efs.arn
         AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -321,28 +315,23 @@ module "eks" {
       groups   = ["system:masters"]
     },
   ]
-
-  tags = {
-    Environment = "dev"
-    Terraform   = "true"
-  }
 }
 
 resource "aws_db_subnet_group" "db_subnet_group" {
-  name       = "rds subnet group"
+  name       = "subnet-group-rds"
   subnet_ids = [module.vpc.database_subnets[0], module.vpc.database_subnets[1], module.vpc.database_subnets[2]]
 
   tags = {
-    Name = "DB subnet group"
+    Name = "subnet-group-rds"
   }
 }
 
 resource "aws_db_instance" "rds_wp" {
   engine                 = "mysql"
-  identifier             = "db-wordpress"
+  identifier             = var.db_name
   username               = var.db_user_name
   password               = var.db_password
-  instance_class         = "db.t3.micro"
+  instance_class         = var.db_instance_class
   storage_type           = "gp2"
   multi_az               = true
   allocated_storage      = 10
@@ -359,7 +348,7 @@ resource "aws_efs_file_system" "efs" {
     transition_to_ia = "AFTER_30_DAYS"
   }
   tags = {
-    Name = "efs-eks"
+    Name = var.efs_name
   }
 }
 
