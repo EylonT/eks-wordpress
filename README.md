@@ -68,7 +68,7 @@ helm repo update
 
 helm upgrade -i aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
     --namespace kube-system \
-    --set image.repository=<region-registry>.dkr.ecr.<region-code>.amazonaws.com/eks/aws-efs-csi-driver \
+    --set image.repository=*region-registry*.dkr.ecr.*region-code*.amazonaws.com/eks/aws-efs-csi-driver \
     --set controller.serviceAccount.create=false \
     --set controller.serviceAccount.name=efs-csi-controller-sa
 
