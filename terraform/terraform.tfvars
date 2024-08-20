@@ -1,6 +1,6 @@
 region                      = "us-east-1"
 cluster_name                = "cluster-eks-lab"
-cluster_version             = "1.27"
+cluster_version             = "1.30"
 vpc_name                    = "vpc-eks-lab"
 bastion_security_group_name = "sgr-bastion-eks-lab"
 rds_security_group_name     = "sgr-rds-eks-lab"
