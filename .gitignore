@@ -1,0 +1,10 @@
+# Terraform/OpenTofu
+.terraform
+terraform.tfvars
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+
+# Ignore Terraform/OpenTofu lock files, as we want to test the Terraform code in these repos with the latest provider
+# versions.
+.terraform.lock.hcl
