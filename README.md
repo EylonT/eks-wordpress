@@ -45,8 +45,6 @@ Because S3 buckets have to have a unique name, a random_string terraform resourc
 
 * Run the command: aws eks update-kubeconfig --region *region-code* --name *cluster-name* (It will allow your machine to connect to the EKS control plane).
 
-* Use terraform state show aws_iam_policy.worker_policy_efs or use the aws console/cli and copy the policy arn.
-
 * Use eksctl to create iamserviceaccount for EFS.
 
 export cluster_name=cluster-eks-lab
