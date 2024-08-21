@@ -45,34 +45,26 @@ Because S3 buckets have to have a unique name, a random_string terraform resourc
 
 * Run the command: aws eks update-kubeconfig --region *region-code* --name *cluster-name* (It will allow your machine to connect to the EKS control plane).
 
-* Run the command: eksctl utils associate-iam-oidc-provider --cluster *cluster-name* --approve --region *region-code* (The oidc provider is needed for the cluster to work with efs).
-
 * Use terraform state show aws_iam_policy.worker_policy_efs or use the aws console/cli and copy the policy arn.
 
-* Use eksctl create iamserviceaccount \
+* Use eksctl to create iamserviceaccount for EFS.
+
+export cluster_name=cluster-eks-lab
+export role_name=AmazonEKS_EFS_CSI_DriverRole
+eksctl create iamserviceaccount \
     --name efs-csi-controller-sa \
     --namespace kube-system \
-    --cluster *cluster-name* \
-    --attach-policy-arn *your-copied-arn* \
-    --approve \
-    --override-existing-serviceaccounts \
-    --region *region-code*
+    --cluster $cluster_name \
+    --role-name $role_name \
+    --role-only \
+    --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy \
+    --region us-east-1 \
+    --approve
+TRUST_POLICY=$(aws iam get-role --role-name $role_name --query 'Role.AssumeRolePolicyDocument' | \
+    sed -e 's/efs-csi-controller-sa/efs-csi-*/' -e 's/StringEquals/StringLike/')
+aws iam update-assume-role-policy --role-name $role_name --policy-document "$TRUST_POLICY"
 
 This command will bind your iam role with the policy that terraform created to a service account (You can also create a service account manually, if you want to do so please consult the documentation).
-
-* Use helm to install the EFS driver:
-
-helm repo add aws-efs-csi-driver https://kubernetes-sigs.github.io/aws-efs-csi-driver/
-
-helm repo update
-
-helm upgrade -i aws-efs-csi-driver aws-efs-csi-driver/aws-efs-csi-driver \
-    --namespace kube-system \
-    --set image.repository=*region-registry*.dkr.ecr.*region-code*.amazonaws.com/eks/aws-efs-csi-driver \
-    --set controller.serviceAccount.create=false \
-    --set controller.serviceAccount.name=efs-csi-controller-sa
-
-change the image according to your region: https://docs.aws.amazon.com/eks/latest/userguide/add-ons-images.html this is the container image of the efs driver.
 
 * Navigate to the kubernetes folder and edit the storageclass.yaml file, enter your EFS file system id, save the file and run kubectl apply -f storageclass.yaml
 Now kubernetes knows how to create a persistent volume with EFS.
