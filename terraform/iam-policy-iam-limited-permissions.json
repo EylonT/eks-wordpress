@@ -34,7 +34,8 @@
                 "iam:GetPolicyVersion",
                 "iam:DeletePolicyVersion",
                 "iam:CreatePolicyVersion",
-                "iam:ListOpenIDConnectProviders"
+                "iam:ListOpenIDConnectProviders",
+                "iam:UpdateAssumeRolePolicy"
             ],
             "Resource": [
                 "arn:aws:iam::*:instance-profile/*",
