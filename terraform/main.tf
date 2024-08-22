@@ -2,6 +2,9 @@ data "aws_availability_zones" "available" {}
 
 data "aws_caller_identity" "current" {}
 
+data "aws_region" "current" {}
+
+#data "aws_ebs_default_kms_key" "current" {}
 data "aws_ami" "latest_amazon_linux" {
   most_recent = true
 
@@ -20,6 +23,7 @@ data "aws_ami" "latest_amazon_linux" {
 
 module "vpc" {
   source               = "terraform-aws-modules/vpc/aws"
+  version              = ">= 5.0.0"
   name                 = var.vpc_name
   cidr                 = "172.16.0.0/16"
   azs                  = slice(data.aws_availability_zones.available.names, 0, 3)
@@ -37,12 +41,12 @@ module "vpc" {
 
   public_subnet_tags = {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-    "kubernetes.io/role/elb"                      = "1"
+    "kubernetes.io/role/elb"                    = "1"
   }
 
   private_subnet_tags = {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-    "kubernetes.io/role/internal-elb"             = "1"
+    "kubernetes.io/role/internal-elb"           = "1"
   }
 }
 
@@ -77,7 +81,7 @@ resource "aws_security_group" "db" {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    cidr_blocks = ["172.16.0.0/16"]
+    cidr_blocks = ["172.16.4.0/24", "172.16.5.0/24", "172.16.6.0/24"]
   }
 
   egress {
@@ -177,6 +181,12 @@ resource "aws_iam_policy" "iam_limited_access" {
   policy = file("iam-policy-iam-limited-permissions.json")
 }
 
+resource "aws_iam_policy" "worker_policy_efs" {
+  name        = "policy-efs-worker-nodes"
+  description = "Worker policy for EFS"
+
+  policy = file("iam-policy-efs-controller.json")
+}
 resource "aws_iam_role" "ec2_bastion_iam_role" {
   name = "role-bastion-ec2"
   managed_policy_arns = [
@@ -219,22 +229,34 @@ resource "aws_instance" "bastion_host" {
                 #!/bin/bash
                 cd /tmp
                 yum update -y
+
+                # Install Terraform
+
                 yum install -y yum-utils
                 yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
                 yum -y install terraform
+                
+                # Install Helm
+                
                 curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
                 chmod 700 get_helm.sh
                 ./get_helm.sh
-                curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.26.2/2023-03-17/bin/linux/amd64/kubectl
+
+                # Install kubectl
+
+                curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.2/2024-07-12/bin/linux/amd64/kubectl
                 chmod +x ./kubectl
-                mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
+                mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$PATH
                 echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+                
+                # Install eksctl
+
                 # for ARM systems, set ARCH to: `arm64`, `armv6` or `armv7`
                 ARCH=amd64
                 PLATFORM=$(uname -s)_$ARCH
-                curl -sLO "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+                curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
                 # (Optional) Verify checksum
-                curl -sL "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
+                curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
                 tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
                 sudo mv /tmp/eksctl /usr/local/bin
                 EOF
@@ -243,21 +265,63 @@ resource "aws_instance" "bastion_host" {
   }
 }
 
-resource "aws_iam_policy" "worker_policy_efs" {
-  name        = "policy-efs-worker-nodes"
-  description = "Worker policy for EFS"
+resource "aws_kms_key" "eks_cloudwatch_kms_key" {
+  description             = "KMS key used for EKS CloudWatch logs"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+}
 
-  policy = file("iam-policy-efs-controller.json")
+resource "aws_kms_alias" "eks_cloudwatch_kms_key_alias" {
+  name          = "alias/key-${var.cluster_name}-eks-cloudwatch"
+  target_key_id = aws_kms_key.eks_cloudwatch_kms_key.key_id
+}
+
+resource "aws_kms_key_policy" "eks_cloudwatch_kms_key_policy" {
+  key_id = aws_kms_key.eks_cloudwatch_kms_key.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Id      = "allow-cloudwatch-access"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        },
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        },
+        Action = [
+          "kms:Encrypt*",
+          "kms:Decrypt*",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:Describe*"
+        ],
+        Resource = "*",
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" : "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/eks/${var.cluster_name}/cluster"
+          }
+        }
+      }
+    ]
+  })
 }
 
 module "eks" {
-  source = "terraform-aws-modules/eks/aws"
+  source  = "terraform-aws-modules/eks/aws"
+  version = ">= 20.0.0"
 
-  cluster_name                    = var.cluster_name
-  cluster_version                 = var.cluster_version
-  cluster_enabled_log_types       = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
-  cluster_endpoint_private_access = true
-  cluster_endpoint_public_access  = true
+  authentication_mode                    = "API_AND_CONFIG_MAP"
+  cloudwatch_log_group_class             = "STANDARD"
+  cloudwatch_log_group_kms_key_id        = aws_kms_key.eks_cloudwatch_kms_key.arn
+  cloudwatch_log_group_retention_in_days = 90
 
   cluster_addons = {
     coredns = {
@@ -269,7 +333,26 @@ module "eks" {
     vpc-cni = {
       most_recent = true
     }
+    eks-pod-identity-agent = {
+      most_recent = true
+    }
+    aws-efs-csi-driver = {
+      most_recent = true
+    }
   }
+
+  cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  cluster_name              = var.cluster_name
+  cluster_upgrade_policy    = "EXTENDED"
+  cluster_version           = var.cluster_version
+  cluster_encryption_config = {
+    "resources" : [
+      "secrets"
+    ]
+  }
+  cluster_endpoint_private_access          = true
+  cluster_endpoint_public_access           = true
+  enable_cluster_creator_admin_permissions = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
@@ -295,10 +378,13 @@ module "eks" {
       max_size     = 4
       desired_size = 3
 
+      ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = [var.eks_instance_type]
+      ebs_optimized  = true
+      #key_name       = data.aws_ebs_default_kms_key.current.key_arn
       iam_role_additional_policies = {
+        AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
         policy-managed-node-group-efs = aws_iam_policy.worker_policy_efs.arn
-        AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       }
     }
   }
@@ -306,15 +392,23 @@ module "eks" {
   kms_key_administrators = [aws_iam_role.ec2_bastion_iam_role.arn, data.aws_caller_identity.current.account_id]
   kms_key_users          = [aws_iam_role.ec2_bastion_iam_role.arn, data.aws_caller_identity.current.account_id]
 
-  manage_aws_auth_configmap = true
+  access_entries = {
+    # One access entry with a policy associated
+    bastion = {
+      kubernetes_groups = []
+      principal_arn     = aws_iam_role.ec2_bastion_iam_role.arn
 
-  aws_auth_roles = [
-    {
-      rolearn  = aws_iam_role.ec2_bastion_iam_role.arn
-      username = aws_iam_role.ec2_bastion_iam_role.name
-      groups   = ["system:masters"]
-    },
-  ]
+      policy_associations = {
+        cluster_admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
+  }
+
 }
 
 resource "aws_db_subnet_group" "db_subnet_group" {
