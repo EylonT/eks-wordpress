@@ -56,6 +56,7 @@ resource "aws_security_group" "ec2_bastion" {
   vpc_id      = module.vpc.vpc_id
 
   egress {
+    description = "Allow all"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -85,6 +86,7 @@ resource "aws_security_group" "db" {
   }
 
   egress {
+    description = "Allow all"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -114,6 +116,7 @@ resource "aws_security_group" "efs" {
   }
 
   egress {
+    description = "Allow all"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -221,6 +224,13 @@ resource "aws_instance" "bastion_host" {
   subnet_id              = module.vpc.private_subnets[0]
   iam_instance_profile   = aws_iam_instance_profile.ec2_bastion_instance_profile.name
   vpc_security_group_ids = [aws_security_group.ec2_bastion.id]
+  ebs_optimized          = true
+  monitoring             = true
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
 
   root_block_device {
     encrypted = true
@@ -421,19 +431,24 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 }
 
 resource "aws_db_instance" "rds_wp" {
-  engine                 = "mysql"
-  identifier             = var.db_name
-  username               = var.db_user_name
-  password               = var.db_password
-  instance_class         = var.db_instance_class
-  storage_type           = "gp2"
-  multi_az               = true
-  allocated_storage      = 10
-  db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
-  vpc_security_group_ids = [aws_security_group.db.id]
-  storage_encrypted      = true
-  skip_final_snapshot    = true
-  db_name                = "dbwordpress"
+  engine                              = "mysql"
+  identifier                          = var.db_name
+  username                            = var.db_user_name
+  password                            = var.db_password
+  instance_class                      = var.db_instance_class
+  storage_type                        = "gp2"
+  multi_az                            = true
+  allocated_storage                   = 10
+  db_subnet_group_name                = aws_db_subnet_group.db_subnet_group.name
+  vpc_security_group_ids              = [aws_security_group.db.id]
+  storage_encrypted                   = true
+  skip_final_snapshot                 = true
+  db_name                             = "dbwordpress"
+  copy_tags_to_snapshot               = true
+  deletion_protection                 = true
+  auto_minor_version_upgrade          = true
+  enabled_cloudwatch_logs_exports     = ["general", "error", "slowquery"]
+  iam_database_authentication_enabled = true
 }
 
 resource "aws_efs_file_system" "efs" {
