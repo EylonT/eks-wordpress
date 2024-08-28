@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.0"
   backend "s3" {
     # Replace this with your bucket name!
-    bucket = ""
+    bucket = "bucket-terraform-state-qxse"
     key    = "terraform/terraform.tfstate"
     region = "us-east-1"
 
