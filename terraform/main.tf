@@ -436,9 +436,9 @@ resource "aws_db_instance" "rds_wp" {
   username                            = var.db_user_name
   password                            = var.db_password
   instance_class                      = var.db_instance_class
-  storage_type                        = "gp2"
+  storage_type                        = "gp3"
   multi_az                            = true
-  allocated_storage                   = 10
+  allocated_storage                   = 20
   db_subnet_group_name                = aws_db_subnet_group.db_subnet_group.name
   vpc_security_group_ids              = [aws_security_group.db.id]
   storage_encrypted                   = true
