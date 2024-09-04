@@ -452,9 +452,18 @@ resource "aws_db_instance" "rds_wp" {
 }
 
 resource "aws_efs_file_system" "efs" {
-  encrypted = true
+  encrypted       = true
+  throughput_mode = "elastic"
   lifecycle_policy {
     transition_to_ia = "AFTER_30_DAYS"
+  }
+
+  lifecycle_policy {
+    transition_to_archive = "AFTER_60_DAYS"
+  }
+
+  lifecycle_policy {
+    transition_to_primary_storage_class = "AFTER_1_ACCESS"
   }
   tags = {
     Name = var.efs_name
