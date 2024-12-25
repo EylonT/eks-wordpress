@@ -192,12 +192,6 @@ resource "aws_iam_policy" "worker_policy_efs" {
 }
 resource "aws_iam_role" "ec2_bastion_iam_role" {
   name = "role-bastion-ec2"
-  managed_policy_arns = [
-    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-    aws_iam_policy.iam_limited_access.arn,
-    aws_iam_policy.policy_eks_full_access.arn,
-    aws_iam_policy.policy_terraform_permissions.arn
-  ]
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -211,6 +205,21 @@ resource "aws_iam_role" "ec2_bastion_iam_role" {
       },
     ]
   })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_iam_limited_access" {
+  role       = aws_iam_role.role.ec2_bastion_iam_role
+  policy_arn = aws_iam_policy.iam_limited_access.arn
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_eks_full_access" {
+  role       = aws_iam_role.role.ec2_bastion_iam_role
+  policy_arn = aws_iam_policy.eks_full_access.arn
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_policy_terraform_permissions" {
+  role       = aws_iam_role.role.ec2_bastion_iam_role
+  policy_arn = aws_iam_policy.policy_terraform_permissions.arn
 }
 
 resource "aws_iam_instance_profile" "ec2_bastion_instance_profile" {
@@ -391,7 +400,7 @@ module "eks" {
       ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = [var.eks_instance_type]
       ebs_optimized  = true
-      #key_name       = data.aws_ebs_default_kms_key.current.key_arn
+      key_name       = data.aws_ebs_default_kms_key.current.key_arn
       iam_role_additional_policies = {
         AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
         policy-managed-node-group-efs = aws_iam_policy.worker_policy_efs.arn
