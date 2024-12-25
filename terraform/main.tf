@@ -209,17 +209,17 @@ resource "aws_iam_role" "ec2_bastion_iam_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_iam_limited_access" {
-  role       = aws_iam_role.ec2_bastion_iam_role.arn
+  role       = aws_iam_role.ec2_bastion_iam_role.name
   policy_arn = aws_iam_policy.iam_limited_access.arn
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_eks_full_access" {
-  role       = aws_iam_role.ec2_bastion_iam_role.arn
+  role       = aws_iam_role.ec2_bastion_iam_role.name
   policy_arn = aws_iam_policy.policy_eks_full_access.arn
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_policy_terraform_permissions" {
-  role       = aws_iam_role.ec2_bastion_iam_role.arn
+  role       = aws_iam_role.ec2_bastion_iam_role.name
   policy_arn = aws_iam_policy.policy_terraform_permissions.arn
 }
 
@@ -395,13 +395,18 @@ module "eks" {
   eks_managed_node_groups = {
     managed-node-group-01 = {
       min_size     = 1
-      max_size     = 4
+      max_size     = 6
       desired_size = 3
 
       ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = [var.eks_instance_type]
       ebs_optimized  = true
-      key_name       = data.aws_ebs_default_kms_key.current.key_arn
+      metadata_options = {
+        http_endpoint               = "enabled"
+        http_tokens                 = "required"
+        http_put_response_hop_limit = 2
+        instance_metadata_tags      = "disabled"
+      }
       iam_role_additional_policies = {
         AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
         policy-managed-node-group-efs = aws_iam_policy.worker_policy_efs.arn
