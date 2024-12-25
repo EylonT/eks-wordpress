@@ -4,7 +4,8 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-#data "aws_ebs_default_kms_key" "current" {}
+data "aws_ebs_default_kms_key" "current" {}
+
 data "aws_ami" "latest_amazon_linux" {
   most_recent = true
 
@@ -208,17 +209,17 @@ resource "aws_iam_role" "ec2_bastion_iam_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_iam_limited_access" {
-  role       = aws_iam_role.role.ec2_bastion_iam_role
+  role       = aws_iam_role.ec2_bastion_iam_role.arn
   policy_arn = aws_iam_policy.iam_limited_access.arn
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_eks_full_access" {
-  role       = aws_iam_role.role.ec2_bastion_iam_role
-  policy_arn = aws_iam_policy.eks_full_access.arn
+  role       = aws_iam_role.ec2_bastion_iam_role.arn
+  policy_arn = aws_iam_policy.policy_eks_full_access.arn
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_bastion_iam_role_attach_policy_terraform_permissions" {
-  role       = aws_iam_role.role.ec2_bastion_iam_role
+  role       = aws_iam_role.ec2_bastion_iam_role.arn
   policy_arn = aws_iam_policy.policy_terraform_permissions.arn
 }
 
